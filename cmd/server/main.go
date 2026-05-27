@@ -16,28 +16,28 @@ func main() {
 
 	gamelogic.PrintServerHelp()
 
-	if err := pubsub.PublishJSON(
-		ch,
-		routing.ExchangePerilDirect,
-		routing.PauseKey,
-		routing.PlayingState{
-			IsPaused: true,
-		},
-	); err != nil {
-		log.Printf("could not publish time: %v", err)
-	}
+	// if err := pubsub.PublishJSON(
+	// 	ch,
+	// 	routing.ExchangePerilDirect,
+	// 	routing.PauseKey,
+	// 	routing.PlayingState{
+	// 		IsPaused: true,
+	// 	},
+	// ); err != nil {
+	// 	log.Printf("could not publish time: %v", err)
+	// }
 
-	topicCh, _, err := pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilTopic,
-		"game_logs",
-		"game_logs.*",
-		pubsub.DurableQueueType,
-	)
-	if err != nil {
-		log.Fatalf("%s\n", err)
-	}
-	defer topicCh.Close()
+	// topicCh, _, err := pubsub.DeclareAndBind(
+	// 	conn,
+	// 	routing.ExchangePerilTopic,
+	// 	"game_logs",
+	// 	"game_logs.*",
+	// 	pubsub.DurableQueueType,
+	// )
+	// if err != nil {
+	// 	log.Fatalf("%s\n", err)
+	// }
+	// defer topicCh.Close()
 
 gameloop:
 	for {

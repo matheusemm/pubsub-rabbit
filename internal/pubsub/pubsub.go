@@ -46,6 +46,41 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	return nil
 }
 
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+	handler func(T),
+) error {
+	queueCh, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+
+	deliveryCh, err := queueCh.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create a consumer: %w", err)
+	}
+
+	go func() {
+		for delivery := range deliveryCh {
+			var value T
+			if err := json.Unmarshal(delivery.Body, &value); err != nil {
+				fmt.Printf("failed to decode message body: %v\n", err)
+				continue
+			}
+
+			handler(value)
+
+			delivery.Ack(false)
+		}
+	}()
+
+	return nil
+}
+
 type SimpleQueueType string
 
 const (
