@@ -1,29 +1,67 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"os/signal"
-	"syscall"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 )
 
 func main() {
-	connString := "amqp://guest:guest@localhost:5672/"
-
-	conn, err := amqp.Dial(connString)
-	if err != nil {
-		log.Fatalf("failed to connect to RabbitMQ server: %s", err)
-	}
+	conn, ch := pubsub.ConnectToRabbitMQ()
 	defer conn.Close()
+	defer ch.Close()
 
-	log.Println("connected successfully to RabitMQ server")
+	gamelogic.PrintServerHelp()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	if err := pubsub.PublishJSON(
+		ch,
+		routing.ExchangePerilDirect,
+		routing.PauseKey,
+		routing.PlayingState{
+			IsPaused: true,
+		},
+	); err != nil {
+		log.Printf("could not publish time: %v", err)
+	}
 
-	<-ctx.Done()
-	fmt.Println("shutting down")
+	topicCh, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.DurableQueueType,
+	)
+	if err != nil {
+		log.Fatalf("%s\n", err)
+	}
+	defer topicCh.Close()
+
+gameloop:
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+
+		switch words[0] {
+		case "pause":
+			log.Println("Pausing the game")
+			if err := pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true}); err != nil {
+				fmt.Printf("failed to pause the game: %v\n", err)
+			}
+		case "resume":
+			log.Println("Resuming the game")
+			if err := pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false}); err != nil {
+				fmt.Printf("failed to resume the game: %v\n", err)
+			}
+		case "quit":
+			log.Println("Exiting")
+			break gameloop
+		default:
+			log.Printf("unknown command: %q", words[0])
+		}
+	}
 }
